@@ -1,4 +1,5 @@
 import os
+import pickle
 from abc import ABC, abstractmethod
 
 class Person(ABC):
@@ -26,6 +27,15 @@ class Book:
     
     def __str__(self):
         return f"{self._title} ({self._author}) - {self._status}"
+    
+    def to_dict(self):
+        return {"title": self._title, "author": self._author, "status": self._status}
+    
+    @classmethod
+    def from_dict(cls, data):
+        book = cls(data["title"], data["author"])
+        book.status = data["status"]
+        return book
 
 class User(Person):
     def __init__(self, name):
@@ -48,6 +58,15 @@ class User(Person):
             self._books.remove(title)
             return True
         return False
+    
+    def to_dict(self):
+        return {"name": self._name, "books": self._books.copy()}
+    
+    @classmethod
+    def from_dict(cls, data):
+        user = cls(data["name"])
+        user._books = data["books"].copy()
+        return user
 
 class Librarian(Person):
     def __init__(self, name):
@@ -62,39 +81,26 @@ class Library:
         self.users = {}
         self.load_data()
     
-    # ================ РАБОТА С ФАЙЛАМИ ================
     def save(self):
-        with open("books.txt", "w", encoding='utf-8') as f:
-            for b in self.books.values():
-                f.write(f"{b.title};{b.author};{b.status}\n")
-        with open("users.txt", "w", encoding='utf-8') as f:
-            for u in self.users.values():
-                f.write(f"{u.name};{','.join(u.books)}\n")
+        books_data = {title: book.to_dict() for title, book in self.books.items()}
+        users_data = {name: user.to_dict() for name, user in self.users.items()}
+        
+        with open("library.pkl", "wb") as f:
+            pickle.dump(books_data, f, protocol=pickle.HIGHEST_PROTOCOL)
+            pickle.dump(users_data, f)
     
     def load_data(self):
-        if os.path.exists("books.txt"):
-            with open("books.txt", "r", encoding='utf-8') as f:
-                for line in f:
-                    if line.strip():
-                        t, a, s = line.strip().split(';')
-                        book = Book(t, a)
-                        book.status = s
-                        self.books[t] = book
-        
-        if os.path.exists("users.txt"):
-            with open("users.txt", "r", encoding='utf-8') as f:
-                for line in f:
-                    if line.strip():
-                        name, books_str = line.strip().split(';')
-                        user = User(name)
-                        if books_str:
-                            for title in books_str.split(','):
-                                user.take_book(title)
-                                if title in self.books:
-                                    self.books[title].status = "выдана"
-                        self.users[name] = user
+        if os.path.exists("library.pkl"):
+            with open("library.pkl", "rb") as f:
+                books_data = pickle.load(f)
+                users_data = pickle.load(f)
+            
+            for title, data in books_data.items():
+                self.books[title] = Book.from_dict(data)
+            
+            for name, data in users_data.items():
+                self.users[name] = User.from_dict(data)
     
-    # ================ ФУНКЦИИ БИБЛИОТЕКАРЯ ================
     def add_book(self):
         t = input("Название: ")
         if t in self.books:
@@ -134,9 +140,8 @@ class Library:
         for b in self.books.values():
             print(f"- {b}")
     
-    # ================ ФУНКЦИИ ПОЛЬЗОВАТЕЛЯ ================
     def show_available(self):
-        print("\n=== ДОСТУПНЫЕ КНИГИ ===")
+        print("\nДОСТУПНЫЕ КНИГИ")
         available = [b for b in self.books.values() if b.status == "доступна"]
         if not available:
             print("Нет доступных книг")
@@ -197,7 +202,7 @@ class Library:
     def show_user_books(self, user_name):
         if user_name in self.users:
             user = self.users[user_name]
-            print(f"\n=== ВАШИ КНИГИ ===")
+            print(f"\nВАШИ КНИГИ")
             if user.books:
                 for i, title in enumerate(user.books, 1):
                     print(f"{i}. {title}")
@@ -271,3 +276,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
+    with open("library.pkl", "rb") as f:
+        raw = f.read(40)
+        print(raw)
